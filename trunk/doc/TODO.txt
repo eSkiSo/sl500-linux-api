@@ -1,0 +1,6 @@
+mifare_socket
+    The client should send ACK and a status (OK, NOK, NONE)
+    OK = green LED for 1 s, 3 beeps for 50 ms every 200 ms
+    NOK = red LED for 1 s, beep for 1 s
+    NONE = switched off
+
