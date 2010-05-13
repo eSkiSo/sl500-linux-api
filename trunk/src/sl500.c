@@ -63,7 +63,7 @@ int open_port(void)
     options.c_cflag &= ~CSTOPB;
     cfmakeraw(&options);
     tcsetattr(fd, TCSANOW, &options);
-    return (fd);
+    return fd;
 }
 
 uint8_t get_byte(int fd)
@@ -421,7 +421,7 @@ void rf_select(int fd)
     int count;
     int i;
 
-    int count = read(fd, buf, 20);
+    count = read(fd, buf, 20);
     
     printf("Response (%d bytes): ", count);
     for (i=0; i<count; i++)

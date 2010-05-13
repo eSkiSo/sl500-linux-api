@@ -33,7 +33,7 @@
 
 /*
  * Use (LED_RED|LED_GREEN) to turn both red and green lights on.
- * Documented as "yellow", but don't looks like it.
+ * Documented as "yellow", but doesn't look like it.
  */
 #define LED_OFF (0x00)
 #define LED_RED (0x01)
