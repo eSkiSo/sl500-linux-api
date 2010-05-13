@@ -1,3 +1,5 @@
+// vim: ts=4 expandtab ai
+
 /*
  * Copyright (c) 2008, Henrik Torstensson <laban@kryo.se>
  *

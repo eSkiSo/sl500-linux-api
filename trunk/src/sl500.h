@@ -1,3 +1,5 @@
+// vim: ts=4 expandtab ai
+
 #ifndef SL500_H
 #define SL500_H
 
