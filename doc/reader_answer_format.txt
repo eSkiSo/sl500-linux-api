@@ -1,6 +1,6 @@
-aa bb LL 00 ID ID CD CD
-header |      |     |
-   length  dev ID  cmd
+aa bb LL 00 ID ID CD CD ER
+header |      |     |   |
+   length  dev ID  cmd  error (00 = success)
 
            |_______________________
             length counts from here
