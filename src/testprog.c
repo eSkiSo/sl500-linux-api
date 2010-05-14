@@ -31,7 +31,7 @@
 int main()
 {
     int fd;
-    uint8_t cardnbr[4], dev_id[2], buf[100];
+    uint8_t dev_id[2], buf[100];
     uint8_t new_dev_id[] = {0x13, 0x1a};
 
     /* Set up serial port */
@@ -64,7 +64,7 @@ int main()
     printf("Card number: %u\n", card_no);
 
     printf("\nrf_select\n");
-    rf_select(fd);
+    rf_select(fd, sizeof(card_no), &card_no);
 
 /*    printf("\nrf_M1_authentication2\n");
     rf_M1_authentication2(fd);
