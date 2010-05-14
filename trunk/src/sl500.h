@@ -90,11 +90,13 @@ uint8_t rf_init_type(int fd, uint8_t mode);
 
 uint8_t rf_antenna_sta(int fd, uint8_t state);
 
-void rf_request(int fd);
+uint8_t rf_request(int fd);
 
-void rf_anticoll(int fd, unsigned int *card_no);
+uint8_t rf_anticoll(int fd, unsigned int *card_no);
 
-void rf_select(int fd);
+uint8_t rf_select(int fd, int cardnbr_size, uint8_t *cardnbr);
+
+uint8_t rf_halt(int fd);
 
 void rf_M1_authentication2(int fd);
 

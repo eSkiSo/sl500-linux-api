@@ -1,0 +1,6 @@
+aa bb LL 00 ID ID CD CD
+header |      |     |
+   length  dev ID  cmd
+
+           |_______________________
+            length counts from here

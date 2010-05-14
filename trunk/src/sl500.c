@@ -142,7 +142,12 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
 {
     uint8_t len, tmp[2];
     uint8_t ver = 0x00;
+    uint8_t act_ver;
     int i;
+
+#ifdef NDEBUG
+    printf("===RESPONSE===\n");
+#endif
 
     expect(fd, 0xaa);                   // Command head
     expect(fd, 0xbb);
@@ -202,7 +207,12 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
     fprintf(stderr, "\n");
 #endif
 
-    expect(fd, ver);                    // Verification
+    //expect(fd, ver);                    // Verification
+    act_ver = get_byte(fd); // Just consume verification for now
+
+    if (act_ver != ver) {
+        printf("WARNING: Verification should be %02hhx but was %02hhx.\n", ver, act_ver);
+    }
 
     return len-6;
 }
@@ -338,102 +348,104 @@ uint8_t rf_antenna_sta(int fd, uint8_t state)
     return status;
 }
 
-
-
-
-
-
-
-
-
-
-
-void rf_request(int fd)
+uint8_t rf_request(int fd)
 {
     uint8_t cmd_code[] = {0x01, 0x02};
     uint8_t dev[] = {0x00, 0x00};
     uint8_t buf[100];
-    uint8_t mode = 0x26;
+    uint8_t mode = REQ_ALL;
+    uint8_t status;
 
     send_command(fd, dev, cmd_code, 1, &mode);
+    receive_response(fd, NULL, NULL, &status, sizeof(buf), &buf);
 
-#ifdef NDEBUG
-    int count;
-    int i;
-    
-    count = read(fd, buf, 20);
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
-#else
-    read(fd, buf, 20);
-#endif
+    return status;
 }
 
-void rf_anticoll(int fd, unsigned int *card_no)
+uint8_t rf_anticoll(int fd, unsigned int *card_no)
 {
     uint8_t cmd_code[] = {0x02, 0x02};
     uint8_t dev[] = {0x00, 0x00};
     uint8_t buf[100];
+    uint8_t status;
     int count;
 
     send_command(fd, dev, cmd_code, 0, NULL);
+    count = receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
 
-    count = read(fd, buf, 20);
+    if (status == 0x00) {
+        /* If the card ID is 4 bytes,
+         * copy it to card_no.
+         */
+        if (count == 4) {
+            ((uint8_t*) card_no)[0] = buf[0];
+            ((uint8_t*) card_no)[1] = buf[1];
+            ((uint8_t*) card_no)[2] = buf[2];
+            ((uint8_t*) card_no)[3] = buf[3];
+        } else {
+#ifdef NDEBUG
+            printf("ID length: %d\n", count);
+#endif
+            *card_no = 0;
+        }
 
 #ifdef NDEBUG
-    int i;
-
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
+        printf("CARD NO: %u\n", *card_no);
 #endif
-
-    /* If the card ID is 4 bytes,
-     * copy it to card_no.
-     */
-    if (count == 14) {
-        ((uint8_t*) card_no)[0] = buf[9];
-        ((uint8_t*) card_no)[1] = buf[10];
-        ((uint8_t*) card_no)[2] = buf[11];
-        ((uint8_t*) card_no)[3] = buf[12];
     } else {
+#ifdef NDEBUG
         *card_no = 0;
+        printf("ERROR\n");
+#endif
     }
 
-#ifdef NDEBUG
-    printf("CARD NO: %u\n", *card_no);
-#endif
-
     usleep(100000);
+
+    return status;
 }
 
-void rf_select(int fd)
+uint8_t rf_select(int fd, int cardnbr_size, uint8_t *cardnbr)
 {
     uint8_t cmd_code[] = {0x03, 0x02};
     uint8_t dev[] = {0x00, 0x00};
     uint8_t buf[100];
-    uint8_t cardnbr[] = {0xd4, 0x45, 0x90, 0x74};
+    uint8_t status;
 
-    send_command(fd, dev, cmd_code, sizeof(cardnbr), cardnbr);
+    send_command(fd, dev, cmd_code, cardnbr_size, cardnbr);
+    receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
 
 #ifdef NDEBUG
-    int count;
-    int i;
-
-    count = read(fd, buf, 20);
-    
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
-#else
-    read(fd, buf, 20);
+    if (status == 0) {
+        printf("Capacity: %02hhx\n", buf[0]);
+    } else {
+        printf("ERROR\n");
+    }
 #endif
 
+    return status;
 }
+
+uint8_t rf_halt(int fd)
+{
+    uint8_t cmd_code[] = {0x04, 0x02};
+    uint8_t dev[] = {0x00, 0x00};
+    uint8_t buf[100];
+    uint8_t status;
+
+    send_command(fd, dev, cmd_code, 0, NULL);
+    receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
+
+    return status;
+}
+
+
+
+
+
+
+
+
+
 
 void rf_M1_authentication2(int fd)
 {
