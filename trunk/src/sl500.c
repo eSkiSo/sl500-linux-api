@@ -55,7 +55,9 @@ int open_port(void)
         perror("open_port: Unable to open /dev/ttyUSB0 - ");
     }
     else
+    {
         fcntl(fd, F_SETFL, 0);
+    }
 
     struct termios options;
     tcgetattr(fd, &options);
@@ -92,6 +94,10 @@ void send_command(int fd, uint8_t dev_id[2], uint8_t cmd_code[2],
     uint8_t ver = 0x00;
     const uint8_t zero = 0x00;
     int i;
+#ifdef DEBUG_LOW_LEVEL
+    char printbuf[100 + param_len * 10];
+    int pos = 0;
+#endif
 
     buf[0] = 0xaa;                      // Command head
     buf[1] = 0xbb;
@@ -102,10 +108,17 @@ void send_command(int fd, uint8_t dev_id[2], uint8_t cmd_code[2],
     buf[6] = cmd_code[0];               // Command code
     buf[7] = cmd_code[1];
 
-#ifdef NDEBUG
-    fprintf(stderr, "Command: ");
+#ifdef DEBUG_LOW_LEVEL
+    fprintf(stderr, "¤¤¤ COMMAND   Length: %2d, Command code: %02hhx %02hhx, Parameter: ", buf[2], cmd_code[0], cmd_code[1]);
+    for (i=0; i<param_len; i++)
+    {
+        pos += sprintf(&printbuf[pos], "%02hhx ", param[i]);
+    }
+    pos += sprintf(&printbuf[pos], "\nSent bytes: ");
     for (i=0; i<8; i++)
-        fprintf(stderr, "%02hhx ", buf[i]);
+    {
+        pos += sprintf(&printbuf[pos], "%02hhx ", buf[i]);
+    }
 #endif
 
     write(fd, buf, 8);
@@ -117,14 +130,14 @@ void send_command(int fd, uint8_t dev_id[2], uint8_t cmd_code[2],
     for (i=0; i<param_len; i++) {
         ver ^= param[i];
         write(fd, &param[i], 1);
-#ifdef NDEBUG
-        fprintf(stderr, "%02hhx ", param[i]);
+#ifdef DEBUG_LOW_LEVEL
+        pos += sprintf(&printbuf[pos], "%02hhx ", param[i]);
 #endif
 
         /* Avoid writing the command head 0xaabb */
         if (param[i] == 0xaa) {
-#ifdef NDEBUG
-            fprintf(stderr, "0x00 ");
+#ifdef DEBUG_LOW_LEVEL
+            pos += sprintf(&printbuf[pos], "0x00 ");
 #endif
             write(fd, &zero, 1);
         }
@@ -132,8 +145,9 @@ void send_command(int fd, uint8_t dev_id[2], uint8_t cmd_code[2],
 
     /* Write verification */
     write(fd, &ver, 1);
-#ifdef NDEBUG
-    fprintf(stderr, "%02hhx\n", ver);
+#ifdef DEBUG_LOW_LEVEL
+    pos += sprintf(&printbuf[pos], "%02hhx", ver);
+    fprintf(stderr, "%s\n", printbuf);
 #endif
 }
 
@@ -145,8 +159,11 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
     uint8_t act_ver;
     int i;
 
-#ifdef NDEBUG
-    printf("===RESPONSE===\n");
+#ifdef DEBUG_LOW_LEVEL
+    int pos = 0;
+    char printbuf[200];
+
+    pos += sprintf(&printbuf[pos], "¤¤¤ RESPONSE  ");
 #endif
 
     expect(fd, 0xaa);                   // Command head
@@ -154,16 +171,16 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
     len = get_byte(fd);                 // Length
     expect(fd, 0x00);
 
-#ifdef NDEBUG
-    fprintf(stderr, "Length: %02hhx\n", len);
+#ifdef DEBUG_LOW_LEVEL
+    pos += sprintf(&printbuf[pos], "Length: %02hhx, ", len);
 #endif
 
     tmp[0] = get_byte(fd);              // Device ID
     tmp[1] = get_byte(fd);
     ver ^= tmp[0];
     ver ^= tmp[1];
-#ifdef NDEBUG
-    fprintf(stderr, "Device ID: %02hhx %02hhx\n", tmp[0], tmp[1]);
+#ifdef DEBUG_LOW_LEVEL
+    pos += sprintf(&printbuf[pos], "Device ID: %02hhx %02hhx, ", tmp[0], tmp[1]);
 #endif
     if (dev_id != NULL) {
         *dev_id = tmp[0];
@@ -177,8 +194,8 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
         cmd_code[0] = tmp[0];
         cmd_code[1] = tmp[1];
     }
-#ifdef NDEBUG
-    fprintf(stderr, "Command code: %02hhx %02hhx\n", tmp[0], tmp[1]);
+#ifdef DEBUG_LOW_LEVEL
+    pos += sprintf(&printbuf[pos], "Command code: %02hhx %02hhx, ", tmp[0], tmp[1]);
 #endif
 
     tmp[0] = get_byte(fd);              // Status
@@ -186,8 +203,8 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
     if (status != NULL) {
         *status = tmp[0];
     }
-#ifdef NDEBUG
-    fprintf(stderr, "Status: %02hhx\nData: ", tmp[0]);
+#ifdef DEBUG_LOW_LEVEL
+    pos += sprintf(&printbuf[pos], "Status: %02hhx\nData: ", tmp[0]);
 #endif
 
     for (i=0; i<len-6; i++) {
@@ -196,15 +213,15 @@ int receive_response(int fd, uint8_t *dev_id, uint8_t *cmd_code,
         if (i<data_len && data != NULL) {
             data[i] = tmp[0];
         }
-#ifdef NDEBUG
-        fprintf(stderr, "%02hhx ", data[i]);
+#ifdef DEBUG_LOW_LEVEL
+        pos += sprintf(&printbuf[pos], "%02hhx ", data[i]);
 #endif
         if (tmp[0] == 0xaa) {
             expect(fd, 0x00);
         }
     }
-#ifdef NDEBUG
-    fprintf(stderr, "\n");
+#ifdef DEBUG_LOW_LEVEL
+    fprintf(stderr, "%s\n", printbuf);
 #endif
 
     //expect(fd, ver);                    // Verification
@@ -357,7 +374,7 @@ uint8_t rf_request(int fd)
     uint8_t status;
 
     send_command(fd, dev, cmd_code, 1, &mode);
-    receive_response(fd, NULL, NULL, &status, sizeof(buf), &buf);
+    receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
 
     return status;
 }
@@ -383,23 +400,21 @@ uint8_t rf_anticoll(int fd, unsigned int *card_no)
             ((uint8_t*) card_no)[2] = buf[2];
             ((uint8_t*) card_no)[3] = buf[3];
         } else {
-#ifdef NDEBUG
+#ifdef DEBUG_COMMANDS
             printf("ID length: %d\n", count);
 #endif
             *card_no = 0;
         }
 
-#ifdef NDEBUG
+#ifdef DEBUG_COMMANDS
         printf("CARD NO: %u\n", *card_no);
 #endif
     } else {
-#ifdef NDEBUG
         *card_no = 0;
+#ifdef DEBUG_COMMANDS
         printf("ERROR\n");
 #endif
     }
-
-    usleep(100000);
 
     return status;
 }
@@ -414,7 +429,7 @@ uint8_t rf_select(int fd, int cardnbr_size, uint8_t *cardnbr)
     send_command(fd, dev, cmd_code, cardnbr_size, cardnbr);
     receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
 
-#ifdef NDEBUG
+#ifdef DEBUG_COMMANDS
     if (status == 0) {
         printf("Capacity: %02hhx\n", buf[0]);
     } else {
@@ -438,41 +453,72 @@ uint8_t rf_halt(int fd)
     return status;
 }
 
-
-
-
-
-
-
-
-
-
-void rf_M1_authentication2(int fd)
+uint8_t rf_M1_authentication2(int fd, uint8_t key_type, uint8_t block, uint8_t key[6])
 {
     uint8_t cmd_code[] = {0x07, 0x02};
     uint8_t dev[] = {0x00, 0x00};
     uint8_t buf[100];
-    uint8_t data[] = {KEY_A, 0x07, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-    send_command(fd, dev, cmd_code, sizeof(data), data);
-    usleep(100000);
-
-#ifdef NDEBUG
-    int count;
+    uint8_t status;
     int i;
+    uint8_t data[8] = {key_type, block};
+    memcpy(&data[2], key, 6);
 
-    count = read(fd, buf, 20);
-    
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
-#else
-    read(fd, buf, 20);
+#ifdef DEBUG_COMMANDS
+    fprintf(stderr, "Authenticating block %d (0x%02hhx) with key", block, block);
+    for (i=0; i<6; i++)
+    {
+        fprintf(stderr, " %02hhx", key[i]);
+    }
+
+    fprintf(stderr, "...\n");
 #endif
 
-    usleep(100000);
+    send_command(fd, dev, cmd_code, sizeof(data), data);
+    receive_response(fd, NULL, NULL, &status, sizeof(buf), buf);
+
+    return status;
 }
+
+uint8_t rf_M1_read(int fd, uint8_t block, uint8_t *content)
+{
+    uint8_t cmd_code[] = {0x08, 0x02};
+    uint8_t dev[] = {0x00, 0x00};
+    uint8_t status;
+    int i;
+    uint8_t data[] = {block};
+    char printbuf[100];
+
+    send_command(fd, dev, cmd_code, sizeof(data), data);
+    receive_response(fd, NULL, NULL, &status, 16, content);
+
+#ifdef DEBUG_COMMANDS
+    int pos = 0;
+    if (status == 0)
+    {
+        fprintf(stderr, "Block %3d (0x%02hhx):", block, block);
+        for (i=0; i<16; i++)
+        {
+            pos += sprintf(&printbuf[pos], " %02hhx", content[i]);
+        }
+        fprintf(stderr, "%s\n", printbuf);
+    }
+    else
+    {
+        fprintf(stderr, "Block %3d (0x%02hhx) could not be read.\n", block, block);
+    }
+#endif
+
+    return status;
+}
+
+
+
+
+
+
+
+
+
 
 void rf_M1_write(int fd)
 {
@@ -482,44 +528,5 @@ void rf_M1_write(int fd)
     uint8_t data[] = {0x04, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00};
 
     send_command(fd, dev, cmd_code, sizeof(data), data);
-
-#ifdef NDEBUG
-    int count;
-    int i;
-
-    count = read(fd, buf, 20);
-    
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
-#else
-    read(fd, buf, 20);
-#endif
-}
-
-void rf_M1_read(int fd)
-{
-    uint8_t cmd_code[] = {0x08, 0x02};
-    uint8_t dev[] = {0x00, 0x00};
-    uint8_t buf[100];
-    uint8_t data[] = {0x04};
-
-    send_command(fd, dev, cmd_code, sizeof(data), data);
-
-#ifdef NDEBUG
-    int count;
-    int i;
-
-    count = read(fd, buf, 40);
-    
-    printf("Response (%d bytes): ", count);
-    for (i=0; i<count; i++)
-        printf("%02hhx ", buf[i]);
-    printf("\n");
-#else
-    read(fd, buf, 40);
-#endif
-
 }
 
