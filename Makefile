@@ -4,6 +4,12 @@ CFLAGS=
 
 all: mifare_socket testprog
 
+debug: CFLAGS=-DDEBUG_COMMANDS
+debug: all
+
+ldebug: CFLAGS=-DDEBUG_LOW_LEVEL
+ldebug: all
+
 obj/mifare_socket.o: src/mifare_socket.c
 	$(CC) $(CFLAGS) -c -o $@ src/mifare_socket.c
 

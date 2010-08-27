@@ -98,11 +98,11 @@ uint8_t rf_select(int fd, int cardnbr_size, uint8_t *cardnbr);
 
 uint8_t rf_halt(int fd);
 
-void rf_M1_authentication2(int fd);
+uint8_t rf_M1_authentication2(int fd, uint8_t key_type, uint8_t block, uint8_t key[6]);
+
+uint8_t rf_M1_read(int fd, uint8_t block, uint8_t *content);
 
 void rf_M1_write(int fd);
-
-void rf_M1_read(int fd);
 
 #endif
 

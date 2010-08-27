@@ -28,65 +28,95 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+void shutdown(int fd, int errorcode)
+{
+    printf("\nResetting communication speed to 19200 baud...\n");
+    rf_init_com(fd, BAUD_19200);
+    exit(errorcode);
+}
+
 int main()
 {
     int fd;
     uint8_t dev_id[2], buf[100];
     uint8_t new_dev_id[] = {0x13, 0x1a};
+    uint8_t key[6];
+    uint8_t status;
+    char printbuf[100];
+    int block, i, pos, authed;
+    unsigned int card_no;
 
     /* Set up serial port */
     fd = open_port();
 
-    printf("\nrf_get_model\n");
+    printf("\nSpeeding up communication to 115200 baud...\n");
+    rf_init_com(fd, BAUD_115200);
+
     rf_get_model(fd, sizeof(buf), buf);
     printf("Model: %s\n", buf);
 
-    printf("\nrf_get_device_number\n");
-    rf_get_device_number(fd, dev_id);
-    printf("Device ID: %02hhx %02hhx\n", dev_id[0], dev_id[1]);
-
-    printf("\nrf_init_device_number\n");
-    rf_init_device_number(fd, new_dev_id);
-
-    printf("\nrf_get_device_number\n");
-    rf_get_device_number(fd, dev_id);
-    printf("Device ID: %02hhx %02hhx\n", dev_id[0], dev_id[1]);
-
-    printf("\nrf_light\n");
     rf_light(fd, LED_OFF);
 
-    printf("\nrf_request\n");
-    rf_request(fd);
+    /* START, MIFARE COMMANDS */
 
-    printf("\nrf_anticoll\n");
-    unsigned int card_no;
-    rf_anticoll(fd, &card_no);
-    printf("Card number: %u\n", card_no);
+    printf("Request all\n");
+    status = rf_request(fd);
+    if (status == 20)
+    {
+        printf("No card - exiting...\n");
+        shutdown(fd, status);
+    }
+    else if (status != 0)
+    {
+        printf("ERROR %d\n", status);
+        shutdown(fd, status);
+    }
 
-    printf("\nrf_select\n");
-    rf_select(fd, sizeof(card_no), &card_no);
+    printf("Anticollision\n");
+    status = rf_anticoll(fd, &card_no);
+    if (status != 0)
+    {
+        printf("ERROR %d\n", status);
+        shutdown(fd, status);
+    }
+    printf("Card number: %u (0x%08x)\n", card_no, card_no);
 
-/*    printf("\nrf_M1_authentication2\n");
-    rf_M1_authentication2(fd);
+    printf("Selecting card\n");
+    status = rf_select(fd, sizeof(card_no), (uint8_t*)&card_no);
+    if (status != 0)
+    {
+        printf("ERROR %d\n", status);
+        shutdown(fd, status);
+    }
 
-    printf("\nrf_M1_write\n");
-    rf_M1_write(fd);
+    printf("\nDumping card contents...\n");
 
-    printf("\nrf_M1_read\n");
-    rf_M1_read(fd);*/
+    memset(key, 0xff, 6);
+    for (block=0; block<256; block++)
+    {
+        if (block % 4 == 0)
+        {
+            status = rf_M1_authentication2(fd, KEY_A, block, key);
+            authed = (status == 0);
+        }
+        if (authed)
+        {
+            rf_M1_read(fd, block, buf);
+            printf("Block %3d (0x%02hhx):", block, block);
+            int i;
+            pos = 0;
+            for (i=0; i<16; i++)
+            {
+                pos += sprintf(&printbuf[pos], " %02hhx", buf[i]);
+            }
+            printf("%s\n", printbuf);
+        }
+        else
+        {
+            printf("Access denied to block %d (%02hhx)\n", block, block);
+        }
+    }
 
-    /*int i;
-    for (i=0; i<3; i++) {
-        rf_light(fd, LED_RED);
-        usleep(300000);
-        rf_light(fd, LED_GREEN);
-        usleep(300000);
-        rf_light(fd, LED_OFF);
-        usleep(300000);
-        rf_beep(fd, 2);
-        usleep(300000);
-    }*/
-
-    return 0;
+    shutdown(fd, 0);
 }
 
